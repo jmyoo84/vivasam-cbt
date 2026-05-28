@@ -976,7 +976,8 @@ async function loadState(){
     const res = await fetch(scriptURL+'?action=getCBTs');
     const data = await res.json();
     if(data.status==='ok'){
-      state.cbts = data.cbts;
+      // 각 CBT에 responses 배열 초기화 (스프레드시트엔 없음)
+      state.cbts = data.cbts.map(c=>({...c, responses: c.responses||[]}));
       setSyncStatus('ok','연결됨');
     } else {
       setSyncStatus('fail','불러오기 실패');
@@ -1070,7 +1071,7 @@ async function testConn(){
     if(data.status==='ok'){
       setSyncStatus('ok','연결됨');
       showURLMsg('✅ 연결 성공! 스프레드시트와 정상 연결되었습니다.','green');
-      state.cbts=data.cbts;
+      state.cbts=data.cbts.map(c=>({...c, responses: c.responses||[]}));
       renderP();
       if(state.adminIn){ renderAdminList(); }
     } else {
