@@ -955,13 +955,72 @@ function renderCustomItems(){
     </div>`).join('');
 }
 
-function loadState(){
-  try { const s=localStorage.getItem('vscbt_st'); if(s) state={...state,...JSON.parse(s)}; } catch(e){}
-  try { const u=localStorage.getItem('vscbt_url'); if(u){ scriptURL=u; document.getElementById('script-url').value=u; } else { document.getElementById('script-url').value=DEFAULT_URL; } } catch(e){ document.getElementById('script-url').value=DEFAULT_URL; }
-  setSyncStatus('ok','연결됨');
+// ── URL 로컬 저장 (URL만 localStorage 유지) ──
+function loadURL(){
+  try{
+    const u=localStorage.getItem('vscbt_url');
+    if(u){ scriptURL=u; }
+    const el=document.getElementById('script-url');
+    if(el) el.value=scriptURL;
+  }catch(e){}
+}
+function saveURLLocal(url){
+  try{localStorage.setItem('vscbt_url',url);}catch(e){}
+}
+
+// ── 스프레드시트에서 CBT 목록 로드 ──
+async function loadState(){
+  loadURL();
+  setSyncStatus('ing','데이터 불러오는 중');
+  try{
+    const res = await fetch(scriptURL+'?action=getCBTs');
+    const data = await res.json();
+    if(data.status==='ok'){
+      state.cbts = data.cbts;
+      setSyncStatus('ok','연결됨');
+    } else {
+      setSyncStatus('fail','불러오기 실패');
+    }
+  }catch(e){
+    console.error('loadState error:', e);
+    setSyncStatus('fail','연결 실패');
+  }
   renderP();
 }
-function saveState(){ try{localStorage.setItem('vscbt_st',JSON.stringify(state));}catch(e){} }
+
+// ── 응답 목록 스프레드시트에서 로드 ──
+async function loadResponses(cbtId){
+  try{
+    const res = await fetch(scriptURL+'?action=getResponses&cbtId='+cbtId);
+    const data = await res.json();
+    if(data.status==='ok'){
+      const cbt=getCBT(cbtId);
+      if(cbt) cbt.responses=data.responses;
+    }
+  }catch(e){ console.error('loadResponses error:', e); }
+}
+
+// ── 스프레드시트에 데이터 전송 ──
+async function sendToSheets(data){
+  setSyncStatus('ing','저장 중');
+  try{
+    const res = await fetch(scriptURL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    });
+    const result = await res.json();
+    setSyncStatus('ok','저장됨');
+    return result;
+  }catch(e){
+    setSyncStatus('fail','저장 실패');
+    console.error(e);
+    return null;
+  }
+}
+
+// saveState는 더 이상 localStorage 사용 안 함 (호환성 유지용)
+function saveState(){}
 
 function setSyncStatus(type, msg){
   const dot=document.getElementById('sync-dot');
@@ -997,7 +1056,7 @@ function saveURL(){
   const url=document.getElementById('script-url').value.trim();
   if(!url){showURLMsg('URL을 입력해 주세요.','red');return;}
   scriptURL=url;
-  try{localStorage.setItem('vscbt_url',url);}catch(e){}
+  saveURLLocal(url);
   showURLMsg('저장되었습니다.','green');
   toast('Apps Script URL이 저장되었습니다.');
 }
@@ -1006,12 +1065,20 @@ async function testConn(){
   showURLMsg('연결 테스트 중...','blue');
   setSyncStatus('ing','테스트 중');
   try{
-    await fetch(scriptURL+'?test=1',{method:'GET',mode:'no-cors'});
-    setSyncStatus('ok','연결됨');
-    showURLMsg('✅ Apps Script와 정상 연결되었습니다. 이제 피드백을 제출하면 구글 스프레드시트에 자동으로 저장됩니다.','green');
+    const res=await fetch(scriptURL+'?action=getCBTs');
+    const data=await res.json();
+    if(data.status==='ok'){
+      setSyncStatus('ok','연결됨');
+      showURLMsg('✅ 연결 성공! 스프레드시트와 정상 연결되었습니다.','green');
+      state.cbts=data.cbts;
+      renderP();
+      if(state.adminIn){ renderAdminList(); }
+    } else {
+      throw new Error('응답 오류');
+    }
   }catch(e){
     setSyncStatus('fail','연결 실패');
-    showURLMsg('❌ 연결 실패. Apps Script URL을 확인해 주세요.','red');
+    showURLMsg('❌ 연결 실패. URL을 확인해 주세요: '+e.message,'red');
   }
 }
 
@@ -1154,10 +1221,8 @@ async function submitResponse(){
     at:new Date().toLocaleString('ko-KR')
   };
 
-  cbt.responses.push(resp);
-  saveState();
-
-  await sendToSheets({ type:'response', cbtId:cbt.id, service:cbt.service, grade:cbt.grade, ...resp });
+  const result = await sendToSheets({ type:'response', cbtId:cbt.id, service:cbt.service, grade:cbt.grade, ...resp });
+  if(result) cbt.responses.push(resp);
 
   prog.style.display='none'; btn.disabled=false;
   document.getElementById('p-form').style.display='none';
@@ -1203,14 +1268,29 @@ function switchDTab(n){
   }
 }
 
-function saveMemo(){
+async function saveMemo(){
   const cbt=getCBT(state.selId); if(!cbt) return;
   cbt.memo=document.getElementById('d-memo').value;
-  saveState();
+  await sendToSheets({type:'saveMemo', id:cbt.id, memo:cbt.memo});
+  toast('메모가 저장되었습니다.');
 }
 
-function selCBT(id){ state.selId=id; renderAdminList(); renderDetail(id); }
-function refreshDetail(){ if(state.selId) renderDetail(state.selId); }
+async function selCBT(id){
+  state.selId=id;
+  renderAdminList();
+  setSyncStatus('ing','응답 불러오는 중');
+  await loadResponses(id);
+  setSyncStatus('ok','완료');
+  renderDetail(id);
+}
+async function refreshDetail(){
+  if(!state.selId) return;
+  setSyncStatus('ing','새로고침 중');
+  await loadResponses(state.selId);
+  setSyncStatus('ok','완료');
+  renderDetail(state.selId);
+  toast('최신 데이터로 업데이트되었습니다.');
+}
 
 function renderDetail(id){
   const cbt=getCBT(id);
@@ -1363,23 +1443,26 @@ async function createCBT(){
     dept:document.getElementById('nc-dept').value.trim(),active:true,responses:[],
     itemsC:selectedC.map(i=>i.code),itemsU:selectedU.map(i=>i.code),
     itemsType:selectedType.map(i=>i.code),customItems:customFinal};
-  state.cbts.push(cbt); state.selId=cbt.id; saveState();
+  cbt.responses=[];
   await sendToSheets({type:'cbt',...cbt});
+  state.cbts.push(cbt); state.selId=cbt.id;
   closeModal(); renderAdminList(); renderDetail(cbt.id); renderP();
   toast(`"${cbt.service}" CBT가 생성되었습니다.`);
 }
 
 async function toggleActive(){
   const cbt=getCBT(state.selId); if(!cbt)return;
-  cbt.active=!cbt.active; saveState();
-  await sendToSheets({type:'cbt',...cbt});
+  cbt.active=!cbt.active;
+  await sendToSheets({type:'toggleCBT', id:cbt.id, active:cbt.active});
   renderAdminList(); renderDetail(state.selId); renderP();
   toast(cbt.active?'CBT가 재개되었습니다.':'CBT가 마감되었습니다.');
 }
 
-function delCBT(){
+async function delCBT(){
   if(!confirm(`"${getCBT(state.selId)?.service}" CBT와 모든 응답 데이터를 삭제할까요?`)) return;
-  state.cbts=state.cbts.filter(c=>c.id!==state.selId); state.selId=null; saveState();
+  await sendToSheets({type:'deleteCBT', id:state.selId});
+  state.cbts=state.cbts.filter(c=>c.id!==state.selId);
+  state.selId=null;
   renderAdminList();
   document.getElementById('admin-empty').style.display='block';
   document.getElementById('admin-detail').style.display='none';
