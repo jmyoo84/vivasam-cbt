@@ -1217,31 +1217,65 @@ function renderP(){
   if(doneEl) doneEl.style.display='none';
 
   const grid=document.getElementById('cbt-card-grid');
-  grid.innerHTML=allCbts.map(c=>{
+  grid.innerHTML='';
+  allCbts.forEach(function(c){
     const active=c.active;
-    const borderStyle=active?'2px solid #2563EB':'1.5px solid rgba(0,0,0,0.08)';
-    const topBar=active?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00C4FF,#2563EB)"></div>':'';
-    const badgeBg=active?'background:linear-gradient(135deg,#2563EB,#1D1FBB);color:#fff':'background:#F3F4F6;color:#9CA3AF';
-    const arrow=active?'<span style="color:#2563EB;font-size:14px">&#8594;</span>':'';
-    const shadow=active?'box-shadow:0 0 0 3px rgba(37,99,235,0.08);':'';
-    const svcType=c.svcTypeLabel?' &middot; '+c.svcTypeLabel:'';
-    const dateStr=(c.start?c.start.split('T')[0]:'')+'~'+(c.end?c.end.split('T')[0]:'');
-    return '<div data-cbt-id="'+c.id+'" class="cbt-select-card" style="background:rgba(255,255,255,0.88);backdrop-filter:blur(10px);border-radius:14px;border:'+borderStyle+';padding:18px;cursor:'+(active?'pointer':'default')+';opacity:'+(active?1:.6)+';position:relative;overflow:hidden;'+shadow+'">'
-      +topBar
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
-      +'<div style="font-size:15px;font-weight:700;color:#1F2937;line-height:1.4;flex:1;padding-right:8px">'+c.service+'</div>'
-      +'<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;'+badgeBg+'">'+(active?'진행 중':'마감')+'</span>'
-      +'</div>'
-      +'<div style="font-size:12px;color:#6B7280;line-height:1.7">'+c.grade+'등급'+svcType+'<br>'+(c.dept||'-')+'<br>'+dateStr+'</div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">'
-      +'<span style="font-size:11px;font-weight:600;background:rgba(37,99,235,0.08);color:#2563EB;padding:2px 8px;border-radius:6px">'+c.grade+'등급</span>'
-      +'<span style="font-size:12px;color:#6B7280">'+c.responses.length+'명 참여</span>'
-      +arrow
-      +'</div>'
-      +'</div>';
-  }).join('');
+    const div=document.createElement('div');
+    div.dataset.cbtId=String(c.id);
+    div.className='cbt-select-card';
+    div.style.cssText='background:rgba(255,255,255,0.88);backdrop-filter:blur(10px);border-radius:14px;'
+      +'border:'+(active?'2px solid #2563EB':'1.5px solid rgba(0,0,0,0.08)')+';'
+      +'padding:18px;cursor:'+(active?'pointer':'default')+';'
+      +'opacity:'+(active?'1':'0.6')+';'
+      +'position:relative;overflow:hidden;'
+      +(active?'box-shadow:0 0 0 3px rgba(37,99,235,0.08);':'');
 
-  // 이벤트 위임으로 카드 클릭 처리
+    if(active){
+      const bar=document.createElement('div');
+      bar.style.cssText='position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00C4FF,#2563EB)';
+      div.appendChild(bar);
+    }
+
+    const header=document.createElement('div');
+    header.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px';
+    const name=document.createElement('div');
+    name.style.cssText='font-size:15px;font-weight:700;color:#1F2937;line-height:1.4;flex:1;padding-right:8px';
+    name.textContent=c.service;
+    const badge=document.createElement('span');
+    badge.style.cssText='font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;'
+      +(active?'background:linear-gradient(135deg,#2563EB,#1D1FBB);color:#fff':'background:#F3F4F6;color:#9CA3AF');
+    badge.textContent=active?'진행 중':'마감';
+    header.appendChild(name);
+    header.appendChild(badge);
+    div.appendChild(header);
+
+    const meta=document.createElement('div');
+    meta.style.cssText='font-size:12px;color:#6B7280;line-height:1.7';
+    const dateStr=(c.start?c.start.split('T')[0]:'')+'~'+(c.end?c.end.split('T')[0]:'');
+    meta.innerHTML=c.grade+'등급'+(c.svcTypeLabel?' · '+c.svcTypeLabel:'')+'<br>'+(c.dept||'-')+'<br>'+dateStr;
+    div.appendChild(meta);
+
+    const footer=document.createElement('div');
+    footer.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)';
+    const gradeBadge=document.createElement('span');
+    gradeBadge.style.cssText='font-size:11px;font-weight:600;background:rgba(37,99,235,0.08);color:#2563EB;padding:2px 8px;border-radius:6px';
+    gradeBadge.textContent=c.grade+'등급';
+    const respCount=document.createElement('span');
+    respCount.style.cssText='font-size:12px;color:#6B7280';
+    respCount.textContent=c.responses.length+'명 참여';
+    footer.appendChild(gradeBadge);
+    footer.appendChild(respCount);
+    if(active){
+      const arrow=document.createElement('span');
+      arrow.style.cssText='color:#2563EB;font-size:16px;font-weight:700';
+      arrow.textContent='→';
+      footer.appendChild(arrow);
+    }
+    div.appendChild(footer);
+    grid.appendChild(div);
+  });
+
+  // 이벤트 위임
   grid.onclick=function(e){
     const card=e.target.closest('.cbt-select-card');
     if(!card) return;
