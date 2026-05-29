@@ -1219,31 +1219,36 @@ function renderP(){
   const grid=document.getElementById('cbt-card-grid');
   grid.innerHTML=allCbts.map(c=>{
     const active=c.active;
-    const gradeColor=active?'background:linear-gradient(135deg,#2563EB,#1D1FBB);color:#fff':'background:#F3F4F6;color:#9CA3AF';
-    return `<div onclick="${active?`selectCBTCard('${c.id}')`:'void(0)'}"
-      style="background:rgba(255,255,255,0.88);backdrop-filter:blur(10px);border-radius:14px;
-        border:${active?'2px solid #2563EB':'1.5px solid rgba(0,0,0,0.08)'};
-        padding:18px;cursor:${active?'pointer':'default'};
-        opacity:${active?1:.6};
-        position:relative;overflow:hidden;
-        ${active?'box-shadow:0 0 0 3px rgba(37,99,235,0.08)':''}">
-      ${active?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00C4FF,#2563EB)"></div>':''}
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:700;color:#1F2937;line-height:1.4;flex:1;padding-right:8px">${c.service}</div>
-        <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;${gradeColor}">${active?'진행 중':'마감'}</span>
-      </div>
-      <div style="font-size:12px;color:#6B7280;line-height:1.7">
-        ${c.grade}등급${c.svcTypeLabel?' · '+c.svcTypeLabel:''}<br>
-        ${c.dept||'-'}<br>
-        ${c.start?c.start.split('T')[0]:''} ~ ${c.end?c.end.split('T')[0]:''}
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
-        <span style="font-size:11px;font-weight:600;background:rgba(37,99,235,0.08);color:#2563EB;padding:2px 8px;border-radius:6px">${c.grade}등급</span>
-        <span style="font-size:12px;color:#6B7280">${c.responses.length}명 참여</span>
-        ${active?'<span style="color:#2563EB;font-size:14px">→</span>':''}
-      </div>
-    </div>`;
+    const borderStyle=active?'2px solid #2563EB':'1.5px solid rgba(0,0,0,0.08)';
+    const topBar=active?'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00C4FF,#2563EB)"></div>':'';
+    const badgeBg=active?'background:linear-gradient(135deg,#2563EB,#1D1FBB);color:#fff':'background:#F3F4F6;color:#9CA3AF';
+    const arrow=active?'<span style="color:#2563EB;font-size:14px">&#8594;</span>':'';
+    const shadow=active?'box-shadow:0 0 0 3px rgba(37,99,235,0.08);':'';
+    const svcType=c.svcTypeLabel?' &middot; '+c.svcTypeLabel:'';
+    const dateStr=(c.start?c.start.split('T')[0]:'')+'~'+(c.end?c.end.split('T')[0]:'');
+    return '<div data-cbt-id="'+c.id+'" class="cbt-select-card" style="background:rgba(255,255,255,0.88);backdrop-filter:blur(10px);border-radius:14px;border:'+borderStyle+';padding:18px;cursor:'+(active?'pointer':'default')+';opacity:'+(active?1:.6)+';position:relative;overflow:hidden;'+shadow+'">'
+      +topBar
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'
+      +'<div style="font-size:15px;font-weight:700;color:#1F2937;line-height:1.4;flex:1;padding-right:8px">'+c.service+'</div>'
+      +'<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;'+badgeBg+'">'+(active?'진행 중':'마감')+'</span>'
+      +'</div>'
+      +'<div style="font-size:12px;color:#6B7280;line-height:1.7">'+c.grade+'등급'+svcType+'<br>'+(c.dept||'-')+'<br>'+dateStr+'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">'
+      +'<span style="font-size:11px;font-weight:600;background:rgba(37,99,235,0.08);color:#2563EB;padding:2px 8px;border-radius:6px">'+c.grade+'등급</span>'
+      +'<span style="font-size:12px;color:#6B7280">'+c.responses.length+'명 참여</span>'
+      +arrow
+      +'</div>'
+      +'</div>';
   }).join('');
+
+  // 이벤트 위임으로 카드 클릭 처리
+  grid.onclick=function(e){
+    const card=e.target.closest('.cbt-select-card');
+    if(!card) return;
+    const id=card.dataset.cbtId;
+    const cbt=getCBT(id);
+    if(cbt&&cbt.active) selectCBTCard(id);
+  };
 }
 
 function selectCBTCard(id){
@@ -1418,6 +1423,9 @@ async function saveMemo(){
 async function selCBT(id){
   state.selId=id;
   renderAdminList();
+  // 먼저 현재 state로 렌더링 (즉시 반응)
+  renderDetail(id);
+  // 스프레드시트에서 최신 응답 불러온 후 재렌더링
   setSyncStatus('ing','응답 불러오는 중');
   await loadResponses(id);
   setSyncStatus('ok','완료');
